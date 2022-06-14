@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -31,53 +31,53 @@ namespace AmazonSignTest
         public static string StandartAuthorization = "AWS4-HMAC-SHA256";
 
 
-        public static Dictionary<string,string> Authorization()
+        public static async Task<Dictionary<string,string>> Authorization()
         {
             var date = dateTimeStamp;
             Dictionary<string, string> result = new();
             var signatures = Signature(date);
-            var str = $"{StandartAuthorization} Credential={AccessKey}/{date.ToString("yyyyMMdd")}/{AwsRegion}/{ServiceNamedefault}/{TERMINATOR},SignedHeaders={headerNameOrValueMerge(date).Keys.FirstOrDefault()},Signature={signatures}";
+            var str = $"{StandartAuthorization} Credential={AccessKey}/{date.ToString("yyyyMMdd")}/{AwsRegion}/{ServiceNamedefault}/{TERMINATOR},SignedHeaders={(await headerNameOrValueMerge(date)).Keys.FirstOrDefault()},Signature={signatures}";
             result.Add(str, dateTimeStamp.ToString(ISO8601BasicFormat));
             return result;
         }
 
 
-        public static string Signature(DateTime date)
+        public static async Task<string> Signature(DateTime date)
         {
-            var StringString = Encoding.UTF8.GetString(Encoding.ASCII.GetBytes(StringToSign(date)));
-            var signingKeys = DeriveSigningKey(date.ToString("yyyyMMdd"));//
-            var signatureHmac = ToHexString(ComputeKeyedHash(HMACSHA256,signingKeys, StringString),true);
+            var StringString = Encoding.UTF8.GetString(Encoding.ASCII.GetBytes(await StringToSign (date)));
+            var signingKeys = await DeriveSigningKey(date.ToString("yyyyMMdd"));//
+            var signatureHmac = await ToHexString(await ComputeKeyedHash(HMACSHA256, signingKeys, StringString), true);
             return signatureHmac;
         }
             
 
-        public static byte[] DeriveSigningKey( string date)
+        public static async Task<byte[]> DeriveSigningKey( string date)
         {
 
             const string ksecretPrefix = SCHEME;
             char[] ksecret = (ksecretPrefix + awsSecretAccessKey).ToCharArray();
-            byte[] hashDate = ComputeKeyedHash(HMACSHA256, Encoding.UTF8.GetBytes(ksecret), date);
-            byte[] hashRegion = ComputeKeyedHash(HMACSHA256, hashDate, AwsRegion);
-            byte[] hashService = ComputeKeyedHash(HMACSHA256, hashRegion, ServiceNamedefault);
-            return ComputeKeyedHash(HMACSHA256, hashService, TERMINATOR);
+            byte[] hashDate = await ComputeKeyedHash(HMACSHA256, Encoding.UTF8.GetBytes(ksecret), date);
+            byte[] hashRegion = await ComputeKeyedHash(HMACSHA256, hashDate, AwsRegion);
+            byte[] hashService = await ComputeKeyedHash(HMACSHA256, hashRegion, ServiceNamedefault);
+            return await ComputeKeyedHash(HMACSHA256, hashService, TERMINATOR);
         }
 
-        public static byte[] ComputeKeyedHash(string algorithm, byte[] key, string data)
+        public static Task<byte[]> ComputeKeyedHash(string algorithm, byte[] key, string data)
         {
             var kha = KeyedHashAlgorithm.Create(algorithm);
             kha.Key = key;
-            return kha.ComputeHash(Encoding.UTF8.GetBytes(data));
+            return Task.FromResult(kha.ComputeHash(Encoding.UTF8.GetBytes(data)));
         }
 
-        public static string StringToSign(DateTime date)
+        public static async Task<string> StringToSign(DateTime date)
         {
-            var canonicalRequestHashed = CanonicalRequestHashed(date);
+            var canonicalRequestHashed = await CanonicalRequestHashed(date);
             var scope = dateTimeStamp.ToString("yyyyMMdd") + "/" + AwsRegion + "/" + ServiceNamedefault + "/aws4_request";
             var stringtoString = "AWS4-HMAC-SHA256" + "\n" + date.ToString(ISO8601BasicFormat) + "\n" + scope + "\n" + canonicalRequestHashed;
             return stringtoString;
         }
 
-        public static Dictionary<string,string> headerNameOrValueMerge(DateTime date)
+        public static async Task<Dictionary<string,string>> headerNameOrValueMerge(DateTime date)
         {
             Dictionary<string, string> result = new();
             Dictionary<string, string> header = new()
@@ -90,13 +90,13 @@ namespace AmazonSignTest
                 
 
             };
-            var headerTolower = CanonicalizeHeaders(header); //header kismi eklenecek
-            var SignedheaderName = CanonicalizeHeaderNames(header);
+            var headerTolower = await CanonicalizeHeaders(header); //header kismi eklenecek
+            var SignedheaderName = await CanonicalizeHeaderNames(header);
             result.Add(SignedheaderName, headerTolower);
             return result;
         }
 
-        public static string CanonicalRequestHashed(DateTime date)
+        public static async Task<string> CanonicalRequestHashed(DateTime date)
         {
             var CanonicalQuery = string.Empty;
             var urlParams = string.Empty;
@@ -108,31 +108,31 @@ namespace AmazonSignTest
             CanonicalUrl = CanonicalUrl.Split("?")[0].Split("com/")[1];
             var Urlencode = UrlEncode(CanonicalUrl,true);
             CanonicalQuery = UrlEncode(urlParams,true);
-            var hashedPayload = ToHexString(Sha256Create(""), true);
-            var resultHeader = headerNameOrValueMerge(date);
+            var hashedPayload = ToHexString(await Sha256Create(""), true);
+            var resultHeader =await headerNameOrValueMerge(date);
             var CanonicalRequest = Method + "\n/" + Urlencode + "\n" + CanonicalQuery + "\n" + resultHeader.Values.FirstOrDefault() + "\n" + resultHeader.Keys.FirstOrDefault() + "\n" + hashedPayload;
-            var conanicalHashed = ToHexString(Sha256Create(CanonicalRequest),true);
+            var conanicalHashed = await ToHexString(await Sha256Create(CanonicalRequest),true);
             return conanicalHashed;
         }
 
 
-        public static string ReverseString(string source)
+        public static Task<string> ReverseString(string source)
         {
             var stringArray = source.Split(";").Reverse();
 
-            return String.Join(";", stringArray.ToArray()); ;
+            return Task.FromResult(String.Join(";", stringArray.ToArray())) ;
         }
 
-        public static byte[] Sha256Create(string createData)
+        public static Task<byte[]> Sha256Create(string createData)
         {
             SHA256 sha = SHA256.Create();
 
             byte[] sourceBytes = Encoding.UTF8.GetBytes(createData);
             byte[] hashBytes = sha.ComputeHash(sourceBytes);
-            return hashBytes;
+            return Task.FromResult(hashBytes);
         }
 
-        public static string CanonicalizeHeaderNames(IDictionary<string, string> headers)
+        public static Task<string> CanonicalizeHeaderNames(IDictionary<string, string> headers)
         {
             var headersToSign = new List<string>(headers.Keys);
             headersToSign.Sort(StringComparer.OrdinalIgnoreCase);
@@ -143,12 +143,12 @@ namespace AmazonSignTest
                 if (sb.Length > 0) sb.Append(";");
                 sb.Append(header.ToLower());
             }
-            return sb.ToString();
+            return Task.FromResult(sb.ToString());
         }
         
-        public static string CanonicalizeHeaders(IDictionary<string, string> headers)
+        public static Task<string> CanonicalizeHeaders(IDictionary<string, string> headers)
         {
-            if (headers == null || headers.Count() == 0) return string.Empty;
+            if (headers == null || headers.Count() == 0) return Task.FromResult(string.Empty);
             var sortedHeaderMap = new SortedDictionary<string, string>();
             foreach (var header in headers.Keys)
             {
@@ -161,16 +161,16 @@ namespace AmazonSignTest
                 sb.AppendFormat("{0}:{1}\n", header.ToLower(), headerValue.Trim());
             }
 
-            return sb.ToString();
+            return Task.FromResult(sb.ToString());
         }
-        public static string ToHexString(byte[] data, bool lowercase)
+        public static Task<string> ToHexString(byte[] data, bool lowercase)
         {
             var sb = new StringBuilder(data.Length * 2);
             for (var i = 0; i < data.Length; i++)
             {
                 sb.Append(data[i].ToString(lowercase ? "x2" : "X2"));
             }
-            return sb.ToString();
+            return Task.FromResult(sb.ToString());
         }
         public static string UrlEncode(string url, bool isPath = false)
         {
